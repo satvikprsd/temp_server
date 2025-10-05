@@ -32,7 +32,7 @@ RUN pip install \
 
 COPY wheels/ /wheels/
 
-RUN pip install /wheels/*
+RUN pip install --no-index --find-links=/wheels /wheels/*
 
 # Pre-download lightweight embedding model (small size!)
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
