@@ -1,76 +1,59 @@
 # ---- Builder Stage ----
 FROM python:3.11-slim as builder
 
-# System settings
+# ---- Environment ----
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Install only essential build deps
+# ---- Install system deps ----
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
-# Virtual environment
+# ---- Virtual environment ----
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Upgrade pip first
-RUN pip install --upgrade pip setuptools wheel
-
-# Copy requirements early for caching
+# ---- Upgrade pip & install requirements ----
 COPY requirements.txt .
+RUN pip install --upgrade pip setuptools wheel
+RUN pip install -r requirements.txt
 
-# Install dependencies in two groups (light + heavy)
-RUN pip install \
-    fastapi==0.115.4 \
-    uvicorn[standard]==0.24.0.post1 \
-    pydantic==2.9.2 \
-    python-dotenv==1.0.0 \
-    requests>=2.31.0 \
-    tqdm==4.66.1
-
-COPY wheels/ /wheels/
-
-RUN pip install --no-index --find-links=/wheels /wheels/*
-
-# Pre-download lightweight embedding model (small size!)
+# ---- Pre-download sentence-transformers model ----
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
 
 # ---- Runtime Stage ----
 FROM python:3.11-slim
 
-# Runtime envs
+# ---- Environment ----
 ENV PYTHONUNBUFFERED=1 \
     PATH="/opt/venv/bin:$PATH" \
-    HF_HOME=/home/appuser/.cache/huggingface \
-    TRANSFORMERS_CACHE=/home/appuser/.cache/huggingface \
-    HF_HUB_CACHE=/home/appuser/.cache/huggingface/hub
+    HF_HOME=/opt/venv/.cache/huggingface \
+    TRANSFORMERS_CACHE=/opt/venv/.cache/huggingface \
+    HF_HUB_CACHE=/opt/venv/.cache/huggingface/hub
 
-# Only curl for healthcheck
+# ---- Only curl for healthcheck ----
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Non-root user
+# ---- Non-root user ----
 RUN groupadd -r appuser && useradd -r -g appuser -u 1001 -m -d /home/appuser appuser
 
-# Copy venv + model cache
+# ---- Copy venv from builder ----
 COPY --from=builder /opt/venv /opt/venv
-COPY --from=builder /root/.cache /home/appuser/.cache
-RUN chown -R appuser:appuser /home/appuser/.cache
 
-# App setup
+# ---- App code ----
 WORKDIR /app
 COPY --chown=appuser:appuser . .
 
-# Permissions
+# ---- Permissions ----
 RUN chmod +x start.sh
-
 USER appuser
 
-# Railway exposes $PORT (default 8080)
+# ---- Railway port ----
 EXPOSE 8080
-
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:$PORT/health || exit 1
 
