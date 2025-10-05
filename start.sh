@@ -1,10 +1,10 @@
 #!/bin/bash
 set -e
 
-# Use PORT environment variable if set, otherwise default to 10000 (Render's default)
-PORT=${PORT:-10000}
+# Railway provides PORT env (default 8080), fallback to 8080 if not set
+PORT=${PORT:-8080}
 
 echo "Starting FastAPI server on port $PORT"
 
-# Start uvicorn with the configured port
+# Use a single worker for lightweight apps (scale via Railway dynos instead of threads)
 exec uvicorn main:app --host 0.0.0.0 --port "$PORT" --workers 1
