@@ -30,11 +30,9 @@ RUN pip install \
     requests>=2.31.0 \
     tqdm==4.66.1
 
-RUN pip install \
-    google-genai==1.38.0 \
-    sentence-transformers>=3.0.0 \
-    huggingface-hub>=0.20.0 \
-    weaviate-client==4.10.4
+COPY wheels/ /wheels/
+
+RUN pip install /wheels/*
 
 # Pre-download lightweight embedding model (small size!)
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
